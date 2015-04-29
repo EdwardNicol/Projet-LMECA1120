@@ -1,12 +1,20 @@
 \documentclass[12pt, a4paper]{report}
 
 \usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}\usepackage[francais]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[francais]{babel}
 
 \author{Simon \bsc{Boigelot} - Edward \bsc{Nicol}\\72251300 - 27101300}
-\title{Projet d'élément finis (LMECA1210) 2015: Rapport}
+\title{Projet d'élément finis (LMECA1120) 2015: Rapport}
 \date{\today}
 
 \begin{document}
 \maketitle
+Equations:
+\begin{eqnarray*}
+\frac{E-E\nu}{(1+\nu)(1-2\nu)}\frac{\partial^2u}{\partial x^2} + \frac{E}{2(1+\nu)}\Bigg(\frac{\partial^2u}{\partial y^2} + \frac{\partial^2u}{\partial z^2}\Bigg) + \frac{E}{2(1+\nu)(1-2\nu)}\Bigg(\frac{\partial^2v}{\partial x \partial y} + \frac{\partial^2w}{\partial x \partial z}\Bigg) = 0\\
+\frac{E-E\nu}{(1+\nu)(1-2\nu)}\frac{\partial^2v}{\partial y^2} + \frac{E}{2(1+\nu)}\Bigg(\frac{\partial^2v}{\partial x^2} + \frac{\partial^2v}{\partial z^2}\Bigg) + \frac{E}{2(1+\nu)(1-2\nu)}\Bigg(\frac{\partial^2u}{\partial x \partial y} + \frac{\partial^2w}{\partial y \partial z}\Bigg) = 0\\
+\frac{E-E\nu}{(1+\nu)(1-2\nu)}\frac{\partial^2w}{\partial z^2} + \frac{E}{2(1+\nu)}\Bigg(\frac{\partial^2w}{\partial x^2} + \frac{\partial^2w}{\partial y^2}\Bigg) + \frac{E}{2(1+\nu)(1-2\nu)}\Bigg(\frac{\partial^2u}{\partial x \partial z} + \frac{\partial^2v}{\partial y \partial z}\Bigg) = 0
+\end{eqnarray*}
+
 \end{document}

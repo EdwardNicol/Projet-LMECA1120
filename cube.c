@@ -7,3 +7,9 @@
 //
 
 #include "cube.h"
+
+
+void cubeCompute(double alpha, double E, double nu, const char *meshFileName, double *U, double *V, double *W);
+{
+    
+}
