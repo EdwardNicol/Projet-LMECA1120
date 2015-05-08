@@ -236,15 +236,18 @@ void tetrahedraDphi(double xsi, double eta, double zet,
 }
 
 
-void cubeEliminate (femProblem* theProblem)
+void cubeConstrain (femProblem* theProblem, int myNode, int myValue)
 {
+    femIterativeSolver* theSolver = theProblem->theSolver;
     
+    theSolver->R0[myNode] = myValue;
+    theSolver->D0[myNode] = myValue;
+    theSolver->AD0[myNode] = myValue;
 }
 
 
-void cubeCompute(double alpha, double E, double nu, const char *meshFileName, double *U, double *V, double *W)
+void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, double *U, double *V, double *W)
 {
-    femProblem* theProblem = femProblemCreate(meshFileName);
     femMesh* theMesh = theProblem->theMesh;
     femIterativeSolver* theSolver = theProblem->theSolver;
     int size = theProblem->size;
@@ -260,8 +263,8 @@ void cubeCompute(double alpha, double E, double nu, const char *meshFileName, do
     double dphidx[nLocalNode], dphidy[nLocalNode], dphidz[nLocalNode];
     
     /*
-    double **Aloc = malloc(sizeof(double*)*12);
-    double A11[nLocalNode][nLocalNode], A12[nLocalNode][nLocalNode], A13[nLocalNode][nLocalNode], A22[nLocalNode][nLocalNode], A23[nLocalNode][nLocalNode], A33[nLocalNode][nLocalNode];*/
+     double **Aloc = malloc(sizeof(double*)*12);
+     double A11[nLocalNode][nLocalNode], A12[nLocalNode][nLocalNode], A13[nLocalNode][nLocalNode], A22[nLocalNode][nLocalNode], A23[nLocalNode][nLocalNode], A33[nLocalNode][nLocalNode];*/
     
     const double a = E/(2*(1+nu));
     const double b = 2*a;
@@ -278,18 +281,18 @@ void cubeCompute(double alpha, double E, double nu, const char *meshFileName, do
     for (iElem=0; iElem<size; iElem++)
     {
         /*
-        for (i=0; i<nLocalNode; i++)// remise a zero des mini-matrices pour l'element nouveau
-        {
-            for (j=0; j<nLocalNode; j++)
-            {
-                A11[i][j]=0;
-                A12[i][j]=0;
-                A13[i][j]=0;
-                A22[i][j]=0;
-                A23[i][j]=0;
-                A33[i][j]=0;
-            }
-        }*/
+         for (i=0; i<nLocalNode; i++)// remise a zero des mini-matrices pour l'element nouveau
+         {
+         for (j=0; j<nLocalNode; j++)
+         {
+         A11[i][j]=0;
+         A12[i][j]=0;
+         A13[i][j]=0;
+         A22[i][j]=0;
+         A23[i][j]=0;
+         A33[i][j]=0;
+         }
+         }*/
         
         for (i=0; i<nLocalNode; i++)
         {
@@ -354,7 +357,7 @@ void cubeCompute(double alpha, double E, double nu, const char *meshFileName, do
                 dudx += Uloc[i]*dphidx[i];
                 dudy += Uloc[i]*dphidy[i];
                 dudz += Uloc[i]*dphidz[i];
-            
+                
                 dvdx += Vloc[i]*dphidx[i];
                 dvdy += Vloc[i]*dphidy[i];
                 dvdz += Vloc[i]*dphidz[i];
@@ -363,17 +366,17 @@ void cubeCompute(double alpha, double E, double nu, const char *meshFileName, do
                 dwdy += Wloc[i]*dphidy[i];
                 dwdz += Wloc[i]*dphidz[i];
             }
-        
+            
             for (i=0; i<nLocalNode; i++)
             {
                 index = map[i];
                 D0[index] -= (b*dphidx[i]*dudx + c*(dphidx[i]*(dudx+dvdy+dwdz))+a*(dphidy[i]*(dudy+dvdx))+a*(dphidz[i]*(dudz+dwdx)))*ajac*weight;
-            
+                
                 D0[index+size/3] -= (a*(dphidx[i]*(dudy+dvdx))+b*dphidy[i]*dvdy+c*(dphidy[i]*(dudx+dvdy+dwdz))+a*(dphidz[i]*(dvdz+dwdx)))*ajac*weight;
-            
+                
                 D0[index+size*2/3] -= (a*(dphidx[i]*(dudz+dwdx))+a*(dphidy[i]*(dvdz+dwdy))+b*dphidz[i]*dwdz+c*(dphidz[i]*(dudx+dvdy+dwdz)))*ajac*weight;
             }
-        
+            
             for (i=0; i<nLocalNode; i++)
             {
                 index = map[i];
@@ -382,6 +385,7 @@ void cubeCompute(double alpha, double E, double nu, const char *meshFileName, do
                 R0[index+size*2/3] = D0[index+size*2/3];
             }
         }
+        
         
         dD1dx=0, dD1dy=0, dD1dz=0, dD2dx=0, dD2dy=0, dD2dz=0, dD3dx=0, dD3dy=0, dD3dz=0;
         
@@ -414,40 +418,47 @@ void cubeCompute(double alpha, double E, double nu, const char *meshFileName, do
         
         
         /*
-        for (i=0; i<nLocalNode; i++) // remplissage des mini-matrices :-)
-        {
-            for (j=0; j<nLocalNode; j++)
-            {
-                A11[i][j] += ((b+c)*dphidx[i]*dphidx[j] + a*dphidy[i]*dphidy[j] + a*dphidz[i]*dphidz[j]) * weight * ajac;
-                A12[i][j] += (c*dphidx[i]*dphidy[j] + a*dphidy[i]*dphidx[j]) * weight * ajac;
-                A13[i][j] += (c*dphidx[i]*dphidz[j] + a*dphidz[i]*dphidx[j]) * weight * ajac;
-                
-                A22[i][j] += ((b+c)*dphidy[i]*dphidy[j] + a*dphidx[i]*dphidx[j] + a*dphidz[i]*dphidz[j]) * weight * ajac;
-                A23[i][j] += (c*dphidy[i]*dphidz[j] + a*dphidz[i]*dphidy[j]) * weight * ajac;
-                
-                A33[i][j] += ((b+c)*dphidz[i]*dphidz[j] + a*dphidy[i]*dphidy[j] + a*dphidx[i]*dphidx[j]) * weight * ajac;
-            }
-        }
-        
-        for (i=0; i<nLocalNode; i++)
-        {
-            for (j=0; j<nLocalNode; j++)
-            {
-                Aloc[i][j] = A11[i][j];// premiere ligne de Aloc
-                Aloc[i][j+4] = A12[i][j];
-                Aloc[i][j+8] = A13[i][j];
-                
-                Aloc[i+4][j] = A12[i][j];// deuxieme ligne de Aloc
-                Aloc[i+4][j+4] = A22[i][j];
-                Aloc[i+4][j+8] = A23[i][j];
-                
-                Aloc[i+8][j] = A13[i][j];// troisieme ligne de Aloc
-                Aloc[i+8][j+4] = A23[i][j];
-                Aloc[i+8][j+8] = A33[i][j];
-            }
-        }*/
+         for (i=0; i<nLocalNode; i++) // remplissage des mini-matrices :-)
+         {
+         for (j=0; j<nLocalNode; j++)
+         {
+         A11[i][j] += ((b+c)*dphidx[i]*dphidx[j] + a*dphidy[i]*dphidy[j] + a*dphidz[i]*dphidz[j]) * weight * ajac;
+         A12[i][j] += (c*dphidx[i]*dphidy[j] + a*dphidy[i]*dphidx[j]) * weight * ajac;
+         A13[i][j] += (c*dphidx[i]*dphidz[j] + a*dphidz[i]*dphidx[j]) * weight * ajac;
+         
+         A22[i][j] += ((b+c)*dphidy[i]*dphidy[j] + a*dphidx[i]*dphidx[j] + a*dphidz[i]*dphidz[j]) * weight * ajac;
+         A23[i][j] += (c*dphidy[i]*dphidz[j] + a*dphidz[i]*dphidy[j]) * weight * ajac;
+         
+         A33[i][j] += ((b+c)*dphidz[i]*dphidz[j] + a*dphidy[i]*dphidy[j] + a*dphidx[i]*dphidx[j]) * weight * ajac;
+         }
+         }
+         
+         for (i=0; i<nLocalNode; i++)
+         {
+         for (j=0; j<nLocalNode; j++)
+         {
+         Aloc[i][j] = A11[i][j];// premiere ligne de Aloc
+         Aloc[i][j+4] = A12[i][j];
+         Aloc[i][j+8] = A13[i][j];
+         
+         Aloc[i+4][j] = A12[i][j];// deuxieme ligne de Aloc
+         Aloc[i+4][j+4] = A22[i][j];
+         Aloc[i+4][j+8] = A23[i][j];
+         
+         Aloc[i+8][j] = A13[i][j];// troisieme ligne de Aloc
+         Aloc[i+8][j+4] = A23[i][j];
+         Aloc[i+8][j+8] = A33[i][j];
+         }
+         }*/
         
     }
+}
+
+
+void cubeCompute(double alpha, double E, double nu, const char *meshFileName, double *U, double *V, double *W)
+{
+    femProblem* theProblem = femProblemCreate(meshFileName);
+    cubeEliminate(theProblem, alpha, E, nu, U, V, W);
     femProblemFree(theProblem);
 }
 
