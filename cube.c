@@ -1,6 +1,6 @@
 //
 //  cube.c
-//  
+//
 //
 //  Created by Simon Boigelot & Edward Nicol on 29/04/2015.
 //
@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+
 
 typedef struct {
     int *elem;
@@ -73,57 +74,6 @@ void femMeshFree(femMesh *theMesh)
     free(theMesh);
 }
 
-
-
-
-
-typedef struct {
-    int n;
-    double *xsi;
-    double *eta;
-    double *zet;
-    double *weight;
-} femIntegrator;
-
-femIntegrator *femIntegratorCreate()
-{
-    int i;
-    int n = 5;
-    double xsi[5]    = { 0.25, 0.5, 0.166666666666666666667, 0.166666666666666666667, 0.166666666666666666667};
-    double eta[5]    = { 0.25, 0.166666666666666666667, 0.5, 0.166666666666666666667, 0.166666666666666666667};
-    double zet[5]    = { 0.25, 0.166666666666666666667, 0.166666666666666666667, 0.5, 0.166666666666666666667};
-    double weight[5] = {-0.133333333333333, 0.075, 0.075, 0.075, 0.075};
-    
-    
-    femIntegrator *theIntegrator = malloc(sizeof(femIntegrator));
-    theIntegrator->n = n;
-    theIntegrator->xsi    = malloc(sizeof(double) * n);
-    theIntegrator->eta    = malloc(sizeof(double) * n);
-    theIntegrator->zet    = malloc(sizeof(double) * n);
-    theIntegrator->weight = malloc(sizeof(double) * n);
-    
-    for (i = 0; i < theIntegrator->n; ++i) {
-        theIntegrator->xsi[i]    = xsi[i];
-        theIntegrator->eta[i]    = eta[i];
-        theIntegrator->zet[i]    = zet[i];
-        theIntegrator->weight[i] = weight[i]; }
-    
-    return theIntegrator;
-}
-
-void femIntegratorFree(femIntegrator *theIntegrator)
-{
-    free(theIntegrator->xsi);
-    free(theIntegrator->eta);
-    free(theIntegrator->zet);
-    free(theIntegrator->weight);
-    free(theIntegrator);
-}
-
-
-
-
-
 typedef struct
 {
     double *R;
@@ -176,14 +126,126 @@ int femIterativeSolverConverged(femIterativeSolver *mySolver)
 }
 
 
+typedef struct
+{
+    int elem[2];
+    int node[3];
+}femEdge;
 
 
+
+typedef struct
+{
+    femMesh *theMesh;
+    femEdge *edges;
+    int nEdge;
+    int nBoundary;
+}femEdges;
+
+
+int fmid (int n1, int n2, int n3)
+{
+    int diff1 = n1 - n2;
+    int diff2 = n1 - n3;
+    
+    if ((diff1>0 || diff2>0) && diff1*diff2 <0)
+    {
+        return n1;
+    }
+    else if (diff1 < 0 && diff2 < 0)
+    {
+        return fmin(n2, n3);
+    }
+    else
+    {
+        return fmax(n2, n3);
+    }
+}
+
+int femEdgesCompare(const void *edgeOne, const void *edgeTwo)
+{
+    int *nodeOne = ((femEdge*) edgeOne)->node;
+    int *nodeTwo = ((femEdge*) edgeTwo)->node;
+    
+    int diffMin = fmin(fmin(nodeOne[0],nodeOne[1]),nodeOne[2]) - fmin(fmin(nodeTwo[0],nodeTwo[1]),nodeTwo[2]);
+    int diffMax = fmax(fmax(nodeOne[0],nodeOne[1]),nodeOne[2]) - fmax(fmax(nodeTwo[0],nodeTwo[1]),nodeTwo[2]);
+    int diffMid = fmid(nodeOne[0], nodeOne[1], nodeOne[2]) - fmid(nodeTwo[0], nodeTwo[1], nodeTwo[2]);
+    
+    if (diffMin < 0)    return  1;
+    if (diffMin > 0)    return -1;
+    if (diffMid < 0)    return  1;
+    if (diffMid > 0)    return -1;
+    if (diffMax < 0)    return  1;
+    if (diffMax > 0)    return -1;
+    return  0;
+}
+
+femEdges* femEdgesCreate(femMesh *theMesh)
+{
+    femEdges *theEdges = malloc(sizeof(femEdges));
+    int nLoc = theMesh->nLocalNode;
+    int i,j,n = theMesh->nElem * nLoc;
+    femEdge* edges = malloc(n * sizeof(femEdge));
+    theEdges->theMesh  = theMesh;
+    theEdges->edges = edges;
+    theEdges->nEdge = n;
+    theEdges->nBoundary = n;
+    
+    for (i = 0; i < theMesh->nElem; i++)
+    {
+        int *elem = &(theMesh->elem[i*nLoc]);
+        for (j = 0; j < nLoc; j++)
+        {
+            int id = i * nLoc + j;
+            edges[id].elem[0] = i;
+            edges[id].elem[1] = -1;
+            
+            edges[id].node[0] = elem[j];
+            edges[id].node[1] = elem[(j + 1) % nLoc];
+            edges[id].node[2] = elem[(j + 2) % nLoc];
+        }
+    }
+    
+    qsort(theEdges->edges, theEdges->nEdge, sizeof(femEdge), femEdgesCompare);
+    
+    int index = 0;
+    int nBoundary = 0;
+    
+    for (i=0; i < theEdges->nEdge; i++)
+    {
+        if (i == theEdges->nEdge - 1 || femEdgesCompare(&edges[i],&edges[i+1]) != 0)
+        {
+            edges[index] = edges[i];
+            nBoundary++;
+        }
+        else
+        {
+            edges[index] = edges[i];
+            edges[index].elem[1] = edges[i+1].elem[0];
+            i ++;
+        }
+        index++;
+    }
+    
+    theEdges->edges = realloc(edges, index * sizeof(femEdge));
+    theEdges->nEdge = index;
+    theEdges->nBoundary = nBoundary;
+    return theEdges;
+}
+
+void femEdgesFree(femEdges* theEdges)
+{
+    free(theEdges->edges);
+    free(theEdges);
+}
 
 typedef struct
 {
     femIterativeSolver* theSolver;
     femMesh* theMesh;
     int size;
+    double* soluce;
+    femEdges* theEdges;
 } femProblem;
 
 femProblem* femProblemCreate(const char *meshFileName)
@@ -191,8 +253,17 @@ femProblem* femProblemCreate(const char *meshFileName)
     femProblem *theProblem = malloc(sizeof(femProblem));
     
     theProblem->theMesh = femMeshRead(meshFileName);
-    theProblem->size = theProblem->theMesh->nElem*12;
+    theProblem->size = theProblem->theMesh->nNode*3;
     theProblem->theSolver = femIterativeSolverCreate(theProblem->size);
+    theProblem->theEdges = femEdgesCreate(theProblem->theMesh);
+    
+    theProblem->soluce = malloc(sizeof(double)*theProblem->size);
+    
+    int i;
+    for (i = 0; i < theProblem->size; i++)
+    {
+        theProblem->soluce[i] = 0;
+    }
     
     return theProblem;
 }
@@ -201,11 +272,10 @@ void femProblemFree(femProblem* theProblem)
 {
     femMeshFree(theProblem->theMesh);
     femIterativeSolverFree(theProblem->theSolver);
-    free (theProblem);
+    femEdgesFree(theProblem->theEdges);
+    free(theProblem->soluce);
+    free(theProblem);
 }
-
-
-
 
 void tetrahedraXsi(double Xsi[4], double Eta[4], double Zet[4])
 {
@@ -215,7 +285,6 @@ void tetrahedraXsi(double Xsi[4], double Eta[4], double Zet[4])
     Xsi[3] = 0.0;   Eta[3] = 0.0,   Zet[3] = 1.0;
 }
 
-
 void tetrahedraPhi(double xsi, double eta, double zet, double phi[4])
 {
     phi[0] = 1.0 - xsi - eta - zet;
@@ -224,26 +293,95 @@ void tetrahedraPhi(double xsi, double eta, double zet, double phi[4])
     phi[3] = zet;
 }
 
-void tetrahedraDphi(double xsi, double eta, double zet,
-                    double dphidxsi[4],double dphideta[4],double dphidzet[4])
+void tetrahedraDphi(double xsi, double eta, double zet, double dphidxsi[4],double dphideta[4],double dphidzet[4])
 {
-    
     dphidxsi[0] = -1.0; dphideta[0] = -1.0; dphidzet[0] = -1.0;
     dphidxsi[1] =  1.0; dphideta[1] =  0.0; dphidzet[1] =  0.0;
     dphidxsi[2] =  0.0; dphideta[2] =  1.0; dphidzet[2] =  0.0;
     dphidxsi[3] =  0.0; dphideta[3] =  0.0; dphidzet[3] =  1.0;
-    
 }
 
-
-void cubeConstrain (femProblem* theProblem, int myNode, int myValue)
+/*
+ * direction:
+ * 0 = u
+ * 1 = v
+ * 2 = w
+ * 3 = contrainte de colonne
+ */
+void cubeConstrain (femProblem* theProblem, int myNode, int myValue, int direction)
 {
     femIterativeSolver* theSolver = theProblem->theSolver;
     
-    theSolver->R0[myNode] = myValue;
-    theSolver->D0[myNode] = myValue;
-    theSolver->AD0[myNode] = myValue;
+    
+    if (direction == 3)
+    {
+        theSolver->R0[myNode] = 0;
+        theSolver->D0[myNode] = 0;
+        theSolver->AD0[myNode] = 0;
+        
+        theSolver->R0[myNode+theProblem->theMesh->nNode] = 0;
+        theSolver->D0[myNode+theProblem->theMesh->nNode] = 0;
+        theSolver->AD0[myNode+theProblem->theMesh->nNode] = 0;
+        
+        theSolver->R0[myNode+2*theProblem->theMesh->nNode] = myValue;
+        theSolver->D0[myNode+2*theProblem->theMesh->nNode] = myValue;
+        theSolver->AD0[myNode+2*theProblem->theMesh->nNode] = myValue;
+    }
+    else
+    {
+        theSolver->R0[myNode+direction*theProblem->theMesh->nNode] = myValue;
+        theSolver->D0[myNode+direction*theProblem->theMesh->nNode] = myValue;
+        theSolver->AD0[myNode+direction*theProblem->theMesh->nNode] = myValue;
+    }
 }
+
+/*
+ * Elimination suivant la methode des gradients conjugues
+ * Copier-Coller de la soluce du devoir 5 :-)
+ */
+double *femIterativeSolverEliminate(femIterativeSolver *mySolver)
+{
+    mySolver->iter++;
+    double error = 0.0; int i;
+    double denAlpha = 0.0;
+    
+    
+    for (i=0; i < mySolver->size; i++)
+    {
+        error += (mySolver->R0[i])*(mySolver->R0[i]);
+        denAlpha += mySolver->D0[i] * mySolver->AD0[i];
+    }
+    double alpha = error/denAlpha;
+    
+    if (mySolver->iter == 1)
+    {
+        for (i=0; i < mySolver->size; i++)
+        {
+            mySolver->R[i] = 0.0;
+        }
+    }
+    
+    else
+    {
+        double numBeta = 0.0;
+        for (i=0; i < mySolver->size; i++)
+        {
+            mySolver->R[i] = alpha * mySolver->D0[i];
+            mySolver->R0[i] = mySolver->R0[i] - alpha * mySolver->AD0[i];
+            numBeta += mySolver->R0[i] * mySolver->R0[i];
+            mySolver->AD[i] = 0.0;
+        }
+        double beta = numBeta/error;
+        for (i=0; i < mySolver->size; i++)
+        {
+            mySolver->AD0[i] = 0.0;
+            mySolver->D0[i] = mySolver->R0[i] + beta * mySolver->D0[i];
+        }
+    }
+    mySolver->error = sqrt(error);
+    return(mySolver->R);
+}
+
 
 
 void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, double *U, double *V, double *W)
@@ -252,7 +390,7 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
     femIterativeSolver* theSolver = theProblem->theSolver;
     int size = theProblem->size;
     
-    int iElem,i,j, nLocalNode = theMesh->nLocalNode, index;
+    int iElem,i,iEdge, nLocalNode = theMesh->nLocalNode, index;
     double X[nLocalNode], Y[nLocalNode], Z[nLocalNode], Uloc[nLocalNode], Vloc[nLocalNode], Wloc[nLocalNode];
     int map[nLocalNode];
     double xsi, eta, zet, weight;
@@ -261,10 +399,6 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
     
     double dphidxsi[nLocalNode], dphideta[nLocalNode], dphidzet[nLocalNode];
     double dphidx[nLocalNode], dphidy[nLocalNode], dphidz[nLocalNode];
-    
-    /*
-     double **Aloc = malloc(sizeof(double*)*12);
-     double A11[nLocalNode][nLocalNode], A12[nLocalNode][nLocalNode], A13[nLocalNode][nLocalNode], A22[nLocalNode][nLocalNode], A23[nLocalNode][nLocalNode], A33[nLocalNode][nLocalNode];*/
     
     const double a = E/(2*(1+nu));
     const double b = 2*a;
@@ -280,20 +414,6 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
     
     for (iElem=0; iElem<size; iElem++)
     {
-        /*
-         for (i=0; i<nLocalNode; i++)// remise a zero des mini-matrices pour l'element nouveau
-         {
-         for (j=0; j<nLocalNode; j++)
-         {
-         A11[i][j]=0;
-         A12[i][j]=0;
-         A13[i][j]=0;
-         A22[i][j]=0;
-         A23[i][j]=0;
-         A33[i][j]=0;
-         }
-         }*/
-        
         for (i=0; i<nLocalNode; i++)
         {
             map[i] = theMesh->elem[iElem*nLocalNode+i];
@@ -306,7 +426,6 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
             Vloc[i] = V[map[i]];
             Wloc[i] = W[map[i]];
         }
-        
         
         xsi = 1.0/4.0;
         eta = 1.0/4.0;
@@ -385,72 +504,86 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
                 R0[index+size*2/3] = D0[index+size*2/3];
             }
         }
-        
-        
-        dD1dx=0, dD1dy=0, dD1dz=0, dD2dx=0, dD2dy=0, dD2dz=0, dD3dx=0, dD3dy=0, dD3dz=0;
-        
-        for (i=0; i<nLocalNode; i++)
+        else
         {
-            index = map[i];
+            dD1dx=0, dD1dy=0, dD1dz=0, dD2dx=0, dD2dy=0, dD2dz=0, dD3dx=0, dD3dy=0, dD3dz=0;
             
-            dD1dx += D0[index]*dphidx[i];
-            dD1dy += D0[index]*dphidy[i];
-            dD1dz += D0[index]*dphidz[i];
+            for (i=0; i<nLocalNode; i++)
+            {
+                index = map[i];
+                
+                dD1dx += D0[index]*dphidx[i];
+                dD1dy += D0[index]*dphidy[i];
+                dD1dz += D0[index]*dphidz[i];
+                
+                dD2dx += D0[index+size/3]*dphidx[i];
+                dD2dy += D0[index+size/3]*dphidy[i];
+                dD2dz += D0[index+size/3]*dphidz[i];
+                
+                dD3dx += D0[index+size*2/3]*dphidx[i];
+                dD3dy += D0[index+size*2/3]*dphidy[i];
+                dD3dz += D0[index+size*2/3]*dphidz[i];
+            }
             
-            dD2dx += D0[index+size/3]*dphidx[i];
-            dD2dy += D0[index+size/3]*dphidy[i];
-            dD2dz += D0[index+size/3]*dphidz[i];
-            
-            dD3dx += D0[index+size*2/3]*dphidx[i];
-            dD3dy += D0[index+size*2/3]*dphidy[i];
-            dD3dz += D0[index+size*2/3]*dphidz[i];
+            for (i=0; i<nLocalNode; i++)
+            {
+                index = map[i];
+                AD0[index] += (b*dphidx[i]*dD1dx + c*(dphidx[i]*(dD1dx+dD2dy+dD3dz))+a*(dphidy[i]*(dD1dy+dD2dx))+a*(dphidz[i]*(dD1dz+dD3dx)))*ajac*weight;
+                
+                AD0[index+size/3] += (a*(dphidx[i]*(dD1dy+dD2dx))+b*dphidy[i]*dD2dy+c*(dphidy[i]*(dD1dx+dD2dy+dD3dz))+a*(dphidz[i]*(dD2dz+dD3dx)))*ajac*weight;
+                
+                AD0[index+size*2/3] += (a*(dphidx[i]*(dD1dz+dD3dx))+a*(dphidy[i]*(dD2dz+dD3dy))+b*dphidz[i]*dD3dz+c*(dphidz[i]*(dD1dx+dD2dy+dD3dz)))*ajac*weight;
+            }
         }
-        
-        for (i=0; i<nLocalNode; i++)
+    } // Fin assemblage -> fin boucle iElem
+    
+    /*
+     *
+     * Appliquer les contraintes sur D0 R0 AD0 :-)
+     *
+     *
+     */
+    for (iEdge=0; iEdge<theProblem->theEdges->nEdge; iEdge++)
+    {
+        femEdge edge = theProblem->theEdges->edges[iEdge];
+        if (edge.elem[1]==-1)
         {
-            index = map[i];
-            AD0[index] += (b*dphidx[i]*dD1dx + c*(dphidx[i]*(dD1dx+dD2dy+dD3dz))+a*(dphidy[i]*(dD1dy+dD2dx))+a*(dphidz[i]*(dD1dz+dD3dx)))*ajac*weight;
-            
-            AD0[index+size/3] += (a*(dphidx[i]*(dD1dy+dD2dx))+b*dphidy[i]*dD2dy+c*(dphidy[i]*(dD1dx+dD2dy+dD3dz))+a*(dphidz[i]*(dD2dz+dD3dx)))*ajac*weight;
-            
-            AD0[index+size*2/3] += (a*(dphidx[i]*(dD1dz+dD3dx))+a*(dphidy[i]*(dD2dz+dD3dy))+b*dphidz[i]*dD3dz+c*(dphidz[i]*(dD1dx+dD2dy+dD3dz)))*ajac*weight;
+            for (i=0; i<3; i++)
+            {
+                if (theMesh->X[edge.node[i] == 0])
+                {
+                    cubeConstrain(theProblem, edge.node[i], 0, 0);
+                }
+                
+                if (theMesh->Y[edge.node[i] == 0])
+                {
+                    cubeConstrain(theProblem, edge.node[i], 0, 1);
+                }
+                
+                if (theMesh->Z[edge.node[i] == 0])
+                {
+                    cubeConstrain(theProblem, edge.node[i], 0, 2);
+                }
+                
+                if (theMesh->Z[edge.node[i]] == 1 && theMesh->X[edge.node[i]]<=4/10 && theMesh->Y[edge.node[i]]<=4/10)
+                {
+                    cubeConstrain(theProblem, edge.node[i], alpha, 3);
+                }
+            }
         }
-        
-        
-        /*
-         for (i=0; i<nLocalNode; i++) // remplissage des mini-matrices :-)
-         {
-         for (j=0; j<nLocalNode; j++)
-         {
-         A11[i][j] += ((b+c)*dphidx[i]*dphidx[j] + a*dphidy[i]*dphidy[j] + a*dphidz[i]*dphidz[j]) * weight * ajac;
-         A12[i][j] += (c*dphidx[i]*dphidy[j] + a*dphidy[i]*dphidx[j]) * weight * ajac;
-         A13[i][j] += (c*dphidx[i]*dphidz[j] + a*dphidz[i]*dphidx[j]) * weight * ajac;
-         
-         A22[i][j] += ((b+c)*dphidy[i]*dphidy[j] + a*dphidx[i]*dphidx[j] + a*dphidz[i]*dphidz[j]) * weight * ajac;
-         A23[i][j] += (c*dphidy[i]*dphidz[j] + a*dphidz[i]*dphidy[j]) * weight * ajac;
-         
-         A33[i][j] += ((b+c)*dphidz[i]*dphidz[j] + a*dphidy[i]*dphidy[j] + a*dphidx[i]*dphidx[j]) * weight * ajac;
-         }
-         }
-         
-         for (i=0; i<nLocalNode; i++)
-         {
-         for (j=0; j<nLocalNode; j++)
-         {
-         Aloc[i][j] = A11[i][j];// premiere ligne de Aloc
-         Aloc[i][j+4] = A12[i][j];
-         Aloc[i][j+8] = A13[i][j];
-         
-         Aloc[i+4][j] = A12[i][j];// deuxieme ligne de Aloc
-         Aloc[i+4][j+4] = A22[i][j];
-         Aloc[i+4][j+8] = A23[i][j];
-         
-         Aloc[i+8][j] = A13[i][j];// troisieme ligne de Aloc
-         Aloc[i+8][j+4] = A23[i][j];
-         Aloc[i+8][j+8] = A33[i][j];
-         }
-         }*/
-        
+    }
+    
+    
+    
+    /*
+     * Elimination suivant la methode des gradients conjugues
+     * Copier-Coller de la soluce du devoir 5 :-)
+     */
+    double *soluce = femIterativeSolverEliminate(theSolver);
+    for (i = 0; i < theProblem->theMesh->nNode; i++)
+    {
+        // vecteur a redecomposer en U, V, W a la fin
+        theProblem->soluce[i] += soluce[i];
     }
 }
 
@@ -461,6 +594,3 @@ void cubeCompute(double alpha, double E, double nu, const char *meshFileName, do
     cubeEliminate(theProblem, alpha, E, nu, U, V, W);
     femProblemFree(theProblem);
 }
-
-
-
