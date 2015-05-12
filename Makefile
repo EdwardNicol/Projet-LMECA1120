@@ -19,7 +19,7 @@ LIBS     = $(GLFWLIBRARY) -lm
 #
 PROG     = myFem
 LISTEOBJ = \
-  main.o
+    main.o
 # ATTENTION... aucun caractere apres le caractere de continuation "\"
 #
 # compilation
@@ -31,7 +31,8 @@ LISTEOBJ = \
 # dependances
 #
 all        : $(PROG)
-main.o     : main.c 
+cube.o     : cube.c 
+main.o     : main.c cube.c
 #
 # edition de lien
 #

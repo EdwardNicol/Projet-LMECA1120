@@ -512,15 +512,15 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
             {
                 index = map[i];
                 
-                dD1dx += D0[index]*dphidx[i];
+                dD1dx += D0[index]*dphidx[i]; //partie "en U"
                 dD1dy += D0[index]*dphidy[i];
                 dD1dz += D0[index]*dphidz[i];
                 
-                dD2dx += D0[index+size/3]*dphidx[i];
+                dD2dx += D0[index+size/3]*dphidx[i]; //partie "en V"
                 dD2dy += D0[index+size/3]*dphidy[i];
                 dD2dz += D0[index+size/3]*dphidz[i];
                 
-                dD3dx += D0[index+size*2/3]*dphidx[i];
+                dD3dx += D0[index+size*2/3]*dphidx[i]; //partie "en W"
                 dD3dy += D0[index+size*2/3]*dphidy[i];
                 dD3dz += D0[index+size*2/3]*dphidz[i];
             }
@@ -591,6 +591,34 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
 void cubeCompute(double alpha, double E, double nu, const char *meshFileName, double *U, double *V, double *W)
 {
     femProblem* theProblem = femProblemCreate(meshFileName);
-    cubeEliminate(theProblem, alpha, E, nu, U, V, W);
+    int testConvergence, i, nNode = theProblem->theMesh->nNode, iter=0;
+    
+    do
+    {
+        cubeEliminate(theProblem, alpha, E, nu, U, V, W);
+        testConvergence = femIterativeSolverConverged(theProblem->theSolver);
+        iter++;
+    }
+    while (testConvergence==0);
+    
+    for (i=0; i<nNode; i++)
+    {
+        printf("U[%d] = %f\n",i, U[i]);
+    }
+    
+    for (i=0; i<nNode; i++)
+    {
+        U[i] = theProblem->soluce[i];
+        V[i] = theProblem->soluce[i+nNode];
+        W[i] = theProblem->soluce[i+2*nNode];
+    }
+    
+    printf("Number of iterations %d\n", iter);
+    
+    for (i=0; i<nNode; i++)
+    {
+        printf("U[%d] = %f\n",i, U[i]);
+    }
+    
     femProblemFree(theProblem);
 }

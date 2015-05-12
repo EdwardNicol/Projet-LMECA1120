@@ -5,14 +5,19 @@
 #define GLFW_INCLUDE_GLU
 #include <GLFW/glfw3.h>
 
+#include "cube.c"
 
 
 int main( void )
 {
     int nElem,nNode,i,j,k,index,trash,*elem;
     double *X,*Y,*Z;
-      
-    FILE* file = fopen("cube1000.txt","r");
+    
+    char *filename = "cube65.txt";
+    
+    const double alpha = -1/10, E=1e-3, nu = 0.3;
+    
+    FILE* file = fopen(filename,"r");
     if (file == NULL) {
     	printf("Error : cannot open mesh file :-) \n");
         exit(0); }
@@ -27,6 +32,19 @@ int main( void )
   	for (i = 0; i < nElem; i++)  {   
      	fscanf(file,"%d : %d %d %d %d \n", &trash,&elem[i*4],&elem[i*4+1],&elem[i*4+2],&elem[i*4+3]); }
   	fclose(file);
+    
+    double *U = malloc(sizeof(double)*nNode);
+    double *V = malloc(sizeof(double)*nNode);
+    double *W = malloc(sizeof(double)*nNode);
+    
+    for (i=0; i<nNode; i++)//initialisation des vecteurs U, V et W
+    {
+        U[i] = 1;
+        V[i] = 1;
+        W[i] = 1;
+    }
+    
+    cubeCompute(alpha, E, nu, filename, U, V, W);
     
  /*   file = fopen("cube23000.txt","w");
     fprintf(file, "Number of nodes %d \n", nNode);
@@ -106,9 +124,9 @@ int main( void )
                         colors[j*3+0] = 1.0;
                         colors[j*3+1] = 1.0;
                         colors[j*3+2] = 1.0; }
-                    coord[j*3+0] = (X[index]-0.5)*8;
-                    coord[j*3+1] = (Y[index]-0.5)*8;
-                    coord[j*3+2] = (Z[index]-0.5)*8;  } 
+                    coord[j*3+0] = (X[index]-0.5+U[index])*8;
+                    coord[j*3+1] = (Y[index]-0.5+V[index])*8;
+                    coord[j*3+2] = (Z[index]-0.5+W[index])*8;  }
   
                 glEnableClientState(GL_VERTEX_ARRAY);
                 glEnableClientState(GL_COLOR_ARRAY);
@@ -138,6 +156,9 @@ int main( void )
     free(X);
     free(Y);
     free(Z);
+    free(U);
+    free(V);
+    free(W);
     free(elem);
     
     glfwTerminate();
