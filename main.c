@@ -39,9 +39,9 @@ int main( void )
     
     for (i=0; i<nNode; i++)//initialisation des vecteurs U, V et W
     {
-        U[i] = 1;
-        V[i] = 1;
-        W[i] = 1;
+        U[i] = X[i];
+        V[i] = Y[i];
+        W[i] = Z[i];
     }
     
     cubeCompute(alpha, E, nu, filename, U, V, W);

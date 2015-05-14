@@ -335,6 +335,20 @@ void cubeConstrain (femProblem* theProblem, int myNode, int myValue, int directi
     }
 }
 
+
+double MaxError(double *tab, int size)
+{
+    int i;
+    double max = tab[0];
+    for(i=1;i<size;i++)
+    {
+        if(tab[i] >= max) max = tab[i];
+    }
+    return max;
+}
+
+
+
 /*
  * Elimination suivant la methode des gradients conjugues
  * Copier-Coller de la soluce du devoir 5 :-)
@@ -342,16 +356,22 @@ void cubeConstrain (femProblem* theProblem, int myNode, int myValue, int directi
 double *femIterativeSolverEliminate(femIterativeSolver *mySolver)
 {
     mySolver->iter++;
-    double error = 0.0; int i;
+    //double error = 0.0;
+    double residus = 0.0;
+    double error[mySolver->size];
+    int i;
     double denAlpha = 0.0;
     
     
     for (i=0; i < mySolver->size; i++)
     {
-        error += (mySolver->R0[i])*(mySolver->R0[i]);
+        //error += (mySolver->R0[i])*(mySolver->R0[i]);
+        residus += (mySolver->R0[i])*(mySolver->R0[i]);
+        error[i] = (mySolver->R0[i])-(mySolver->R0[i]);
         denAlpha += mySolver->D0[i] * mySolver->AD0[i];
     }
-    double alpha = error/denAlpha;
+    //double alpha = error/denAlpha;
+    double alpha = residus/denAlpha;
     
     if (mySolver->iter == 1)
     {
@@ -371,15 +391,19 @@ double *femIterativeSolverEliminate(femIterativeSolver *mySolver)
             numBeta += mySolver->R0[i] * mySolver->R0[i];
             mySolver->AD[i] = 0.0;
         }
-        double beta = numBeta/error;
+        //double beta = numBeta/error;
+        double beta = numBeta/residus;
+        
         for (i=0; i < mySolver->size; i++)
         {
             mySolver->AD0[i] = 0.0;
             mySolver->D0[i] = mySolver->R0[i] + beta * mySolver->D0[i];
         }
     }
-    mySolver->error = sqrt(error);
+    //mySolver->error = sqrt(error);
+    mySolver->error = MaxError(error,mySolver->size);
     return(mySolver->R);
+    
 }
 
 
@@ -543,6 +567,13 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
      *
      *
      */
+    
+    for (i=0; i<size; i++)
+    {
+        printf("R0[%d] = %f\n",i, R0[i]);
+    }
+    
+    
     for (iEdge=0; iEdge<theProblem->theEdges->nEdge; iEdge++)
     {
         femEdge edge = theProblem->theEdges->edges[iEdge];
@@ -573,6 +604,11 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
         }
     }
     
+    /*
+    for (i=0; i<size; i++)
+    {
+        printf("R0[%d] = %f\n",i, R0[i]);
+    }*/
     
     
     /*
@@ -601,10 +637,13 @@ void cubeCompute(double alpha, double E, double nu, const char *meshFileName, do
     }
     while (testConvergence==0);
     
+    if(testConvergence==1) printf("Cool :-)\n");
+    if(testConvergence == -1) printf("No convergence in %d steps",3000);
+    /*
     for (i=0; i<nNode; i++)
     {
         printf("U[%d] = %f\n",i, U[i]);
-    }
+    }*/
     
     for (i=0; i<nNode; i++)
     {
@@ -614,11 +653,12 @@ void cubeCompute(double alpha, double E, double nu, const char *meshFileName, do
     }
     
     printf("Number of iterations %d\n", iter);
-    
+    /*
     for (i=0; i<nNode; i++)
     {
         printf("U[%d] = %f\n",i, U[i]);
-    }
+    }*/
     
     femProblemFree(theProblem);
+    
 }
