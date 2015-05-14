@@ -568,41 +568,14 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
      *
      */
     
+    /*
     for (i=0; i<size; i++)
     {
         printf("R0[%d] = %f\n",i, R0[i]);
-    }
+    }*/
     
     
-    for (iEdge=0; iEdge<theProblem->theEdges->nEdge; iEdge++)
-    {
-        femEdge edge = theProblem->theEdges->edges[iEdge];
-        if (edge.elem[1]==-1)
-        {
-            for (i=0; i<3; i++)
-            {
-                if (theMesh->X[edge.node[i] == 0])
-                {
-                    cubeConstrain(theProblem, edge.node[i], 0, 0);
-                }
-                
-                if (theMesh->Y[edge.node[i] == 0])
-                {
-                    cubeConstrain(theProblem, edge.node[i], 0, 1);
-                }
-                
-                if (theMesh->Z[edge.node[i] == 0])
-                {
-                    cubeConstrain(theProblem, edge.node[i], 0, 2);
-                }
-                
-                if (theMesh->Z[edge.node[i]] == 1 && theMesh->X[edge.node[i]]<=4/10 && theMesh->Y[edge.node[i]]<=4/10)
-                {
-                    cubeConstrain(theProblem, edge.node[i], alpha, 3);
-                }
-            }
-        }
-    }
+    
     
     /*
     for (i=0; i<size; i++)
@@ -615,22 +588,60 @@ void cubeEliminate (femProblem* theProblem, double alpha, double E, double nu, d
      * Elimination suivant la methode des gradients conjugues
      * Copier-Coller de la soluce du devoir 5 :-)
      */
-    double *soluce = femIterativeSolverEliminate(theSolver);
-    for (i = 0; i < theProblem->theMesh->nNode; i++)
-    {
-        // vecteur a redecomposer en U, V, W a la fin
-        theProblem->soluce[i] += soluce[i];
-    }
+    
 }
 
 
 void cubeCompute(double alpha, double E, double nu, const char *meshFileName, double *U, double *V, double *W)
 {
     femProblem* theProblem = femProblemCreate(meshFileName);
-    int testConvergence, i, nNode = theProblem->theMesh->nNode, iter=0;
+    femMesh* theMesh = femMeshRead(meshFileName);
+    femIterativeSolver *theSolver = theProblem->theSolver;
+    
+    int testConvergence, i, iEdge, nNode = theMesh->nNode, iter=0;
     
     do
     {
+        
+        /*
+         * Application des contraintes
+         */
+        for (iEdge=0; iEdge<theProblem->theEdges->nEdge; iEdge++)
+        {
+            femEdge edge = theProblem->theEdges->edges[iEdge];
+            if (edge.elem[1]==-1)
+            {
+                for (i=0; i<3; i++)
+                {
+                    if (theMesh->X[edge.node[i] == 0])
+                    {
+                        cubeConstrain(theProblem, edge.node[i], 0, 0);
+                    }
+                    
+                    if (theMesh->Y[edge.node[i] == 0])
+                    {
+                        cubeConstrain(theProblem, edge.node[i], 0, 1);
+                    }
+                    
+                    if (theMesh->Z[edge.node[i] == 0])
+                    {
+                        cubeConstrain(theProblem, edge.node[i], 0, 2);
+                    }
+                    
+                    if (theMesh->Z[edge.node[i]] == 1 && theMesh->X[edge.node[i]]<=4/10 && theMesh->Y[edge.node[i]]<=4/10)
+                    {
+                        cubeConstrain(theProblem, edge.node[i], alpha, 3);
+                    }
+                }
+            }
+            
+            double *soluce = femIterativeSolverEliminate(theSolver);
+            for (i = 0; i < theProblem->theMesh->nNode; i++)
+            {
+                // vecteur a redecomposer en U, V, W a la fin
+                theProblem->soluce[i] += soluce[i];
+            }
+        }
         cubeEliminate(theProblem, alpha, E, nu, U, V, W);
         testConvergence = femIterativeSolverConverged(theProblem->theSolver);
         iter++;
@@ -653,12 +664,13 @@ void cubeCompute(double alpha, double E, double nu, const char *meshFileName, do
     }
     
     printf("Number of iterations %d\n", iter);
-    /*
+    
     for (i=0; i<nNode; i++)
     {
         printf("U[%d] = %f\n",i, U[i]);
-    }*/
+    }
     
+    free(theMesh);
     femProblemFree(theProblem);
     
 }
